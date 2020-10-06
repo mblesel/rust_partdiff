@@ -19,8 +19,8 @@ impl std::str::FromStr for CalculationMethod
     {
         match s
         {
-            "MethGaussSeidel" => Ok(CalculationMethod::MethGaussSeidel),
-            "MethJacobi" => Ok(CalculationMethod::MethJacobi),
+            "MethGaussSeidel" | "1" => Ok(CalculationMethod::MethGaussSeidel),
+            "MethJacobi" | "2" => Ok(CalculationMethod::MethJacobi),
             _ => Err(format!("'{}' is not a valid value for CalculationMethod", s)),
         }
     }
@@ -41,8 +41,8 @@ impl std::str::FromStr for InferenceFunction
     {
         match s
         {
-            "FuncF0" => Ok(InferenceFunction::FuncF0),
-            "FuncFPiSin" => Ok(InferenceFunction::FuncFPiSin),
+            "FuncF0" | "1" => Ok(InferenceFunction::FuncF0),
+            "FuncFPiSin" | "2" => Ok(InferenceFunction::FuncFPiSin),
             _ => Err(format!("'{}' is not a valid value for InferenceFunction", s)),
         }
     }
@@ -63,8 +63,8 @@ impl std::str::FromStr for TerminationCondition
     {
         match s
         {
-            "TermPrec" => Ok(TerminationCondition::TermPrec),
-            "TermIter" => Ok(TerminationCondition::TermIter),
+            "TermPrec" | "1" => Ok(TerminationCondition::TermPrec),
+            "TermIter" | "2" => Ok(TerminationCondition::TermIter),
             _ => Err(format!("'{}' is not a valid value for TerminationCondition", s)),
         }
     }
