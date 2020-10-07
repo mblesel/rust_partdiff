@@ -1,5 +1,5 @@
-use std::ops::{Index,IndexMut};
 use std::time::{Instant, Duration};
+use std::ops::{Index,IndexMut};
 use std::process;
 use std::env;
 use std::vec;
@@ -26,6 +26,7 @@ impl std::str::FromStr for CalculationMethod
     }
 }
 
+
 #[derive(Debug, PartialEq)]
 enum InferenceFunction
 {
@@ -47,6 +48,7 @@ impl std::str::FromStr for InferenceFunction
         }
     }
 }
+
 
 #[derive(Debug, PartialEq)]
 enum TerminationCondition
@@ -70,6 +72,7 @@ impl std::str::FromStr for TerminationCondition
     }
 }
 
+
 #[derive(Debug)]
 struct CalculationOptions
 {
@@ -91,6 +94,7 @@ impl CalculationOptions
         CalculationOptions{number, method, interlines, inf_func, termination, term_iteration, term_precision}
     }
 }
+
 
 #[derive(Debug)]
 struct CalculationArguments
@@ -117,6 +121,7 @@ impl CalculationArguments
     }
 }
 
+
 #[derive(Debug)]
 struct CalculationResults
 {
@@ -132,6 +137,7 @@ impl CalculationResults
         CalculationResults{m, stat_iteration, stat_precision}
     }
 }
+
 
 #[derive(Debug)]
 struct PartdiffMatrix
@@ -226,16 +232,42 @@ fn usage()
 {
     println!("Usage: ./partdiff [number] [method] [interlines] [func] [termination] [prec/iter]\n");
     println!("  -number:      number of threads (1 .. n)");
-    println!("  -method:      calculation method (MethGaussSeidel / MethJacobi)");
+    println!("  -method:      calculation method (MethGaussSeidel/MethJacobi OR 1/2)");
     println!("  -interlines:  number of interlines (1 .. n)");
     println!("                  matrixsize = (interlines * 8) + 9");
-    println!("  -func:        inference function (FuncF0 / FuncFPiSin)");
-    println!("  -termination: termination condition (TermPrec, TermIter)");
+    println!("  -func:        inference function (FuncF0/FuncFPiSin OR 1/2)");
+    println!("  -termination: termination condition (TermPrec/TermIter OR 1/2)");
     println!("                  TermPrec: sufficient precision");
     println!("                  TermIter: number of iterations");
     println!("  -prec/iter:   depending on termination:");
     println!("                  precision: 1e-4 .. 1e-20");
     println!("                  iterations: 1 .. n");
+}
+
+
+fn parse_arg<U>(arg: Option<String>) -> U
+where U: std::str::FromStr,
+      <U as std::str::FromStr>::Err: std::fmt::Display
+{
+    let ret: U = match arg
+    {
+        Some(a) =>
+        {
+            a.parse().unwrap_or_else(|error|
+                {
+                    eprintln!("Error: {}", error);
+                    usage();
+                    process::exit(1);
+                })
+        },
+        None =>
+        {
+            eprintln!("Error: incomplete arguments.");
+            usage();
+            process::exit(1);
+        },
+    };
+    ret
 }
 
 fn ask_params(mut args: std::env::Args) -> CalculationOptions
@@ -252,175 +284,50 @@ fn ask_params(mut args: std::env::Args) -> CalculationOptions
     // TODO interactive arguments   
        
     args.next();
-
-    let number: u64 = match args.next()
+    
+    let number: u64 = parse_arg(args.next());
+    if number < 1
     {
-        Some(arg) =>
-        {
-            let num: u64 = arg.parse().unwrap_or_else(|error|
-                {
-                    println!("Error: {}", error);
-                    usage();
-                    process::exit(1);
-                });
+        eprintln!("Error number argument must be a positive integer");
+        usage();
+        process::exit(1);
+    }
 
-            if num < 1
-            {
-                println!("Error number argument must be a positive integer");
-                usage();
-                process::exit(1);
-            }
+    let method: CalculationMethod = parse_arg(args.next());
 
-            num
-        },
-        None => 
-        {
-            println!("Error: incomplete arguments.");
-            usage();
-            process::exit(1);
-        },
-    };
+    let interlines: usize = parse_arg(args.next());
 
-    let method: CalculationMethod = match args.next()
-    {
-        Some(arg) =>
-        {
-            arg.parse().unwrap_or_else(|error|
-                {
-                    println!("Error: {}", error);
-                    usage();
-                    process::exit(1);
-                })
-        },
-        None =>
-        {
-            println!("Error: incomplete arguments.");
-            usage();
-            process::exit(1);
-        },
-    };
+    let inf_func: InferenceFunction = parse_arg(args.next());
 
-    let interlines: usize = match args.next()
-    {
-        Some(arg) =>
-        {
-            arg.parse().unwrap_or_else(|error|
-                {
-                    println!("Error: {}", error);
-                    usage();
-                    process::exit(1);
-                })
-        },
-        None =>
-        {
-            println!("Error: incomplete arguments.");
-            usage();
-            process::exit(1);
-        },
-    };
-
-    let inf_func: InferenceFunction = match args.next()
-    {
-        Some(arg) =>
-        {
-            arg.parse().unwrap_or_else(|error|
-                {
-                    println!("Error: {}", error);
-                    usage();
-                    process::exit(1);
-                })
-        },
-        None =>
-        {
-            println!("Error: incomplete arguments.");
-            usage();
-            process::exit(1);
-        },
-    };
-
-    let termination: TerminationCondition = match args.next()
-    {
-        Some(arg) =>
-        {
-            arg.parse().unwrap_or_else(|error|
-                {
-                    println!("Error: {}", error);
-                    usage();
-                    process::exit(1);
-                })
-        },
-        None =>
-        {
-            println!("Error: incomplete arguments.");
-            usage();
-            process::exit(1);
-        },
-    };
+    let termination: TerminationCondition = parse_arg(args.next());
 
     match termination
     {
         TerminationCondition::TermPrec =>
         {
-            match args.next()
+            let prec: f64 = parse_arg(args.next());
+            if (prec < 1e-20) | (prec > 1e-4)
             {
-                Some(arg) =>
-                {
-                    let f: f64 =  arg.parse().unwrap_or_else(|error|
-                        {
-                            println!("Error: {}", error);
-                            usage();
-                            process::exit(1);
-                        });
-
-                    if (f < 1e-20) | (f > 1e-4)
-                    {
-                        println!("Error: termination precision must be between 1e-20 and 1e-4");
-                        usage();
-                        process::exit(1);
-                    }
-
-                    return CalculationOptions::new(number, method, interlines, inf_func, termination, std::u64::MAX, f);
-                },
-                None =>
-                {
-                    println!("Error: incomplete arguments.");
-                    usage();
-                    process::exit(1);
-                },
+                eprintln!("Error: termination precision must be between 1e-20 and 1e-4");
+                usage();
+                process::exit(1);
             }
+            return CalculationOptions::new(number, method, interlines, inf_func, termination, std::u64::MAX, prec);
         },
         TerminationCondition::TermIter =>
         {
-            match args.next()
+            let iterations = parse_arg(args.next());
+            if iterations < 1
             {
-                Some(arg) =>
-                {
-                    let n: u64 =  arg.parse().unwrap_or_else(|error|
-                        {
-                            println!("Error: {}", error);
-                            usage();
-                            process::exit(1);
-                        });
-
-                    if n < 1
-                    {
-                        println!("Error: termination iterations must be > 1");
-                        usage();
-                        process::exit(1);
-                    }
-
-                    return CalculationOptions::new(number, method, interlines, inf_func, termination, n, 0.0);
-                },
-                None =>
-                {
-                    println!("Error: incomplete arguments.");
-                    usage();
-                    process::exit(1);
-                },
+                eprintln!("Error: termination iterations must be > 1");
+                usage();
+                process::exit(1);
             }
+            return CalculationOptions::new(number, method, interlines, inf_func, termination, iterations, 0.0);
         },
     }
 }
+
 
 fn init_variables(options: &CalculationOptions) -> (CalculationArguments, CalculationResults)
 {
@@ -436,6 +343,7 @@ fn init_variables(options: &CalculationOptions) -> (CalculationArguments, Calcul
 
     (arguments, results)
 }
+
 
 fn init_matrices(arguments: &mut CalculationArguments, options: &CalculationOptions)
 {
@@ -467,6 +375,7 @@ fn init_matrices(arguments: &mut CalculationArguments, options: &CalculationOpti
         }
     }
 }
+
 
 fn calculate(arguments: &mut CalculationArguments, results: &mut CalculationResults, options: &CalculationOptions)
 {
@@ -612,6 +521,7 @@ fn display_statistics(arguments: &CalculationArguments, results: &CalculationRes
     println!("Anzahl Iterationen: {}", results.stat_iteration);
     println!("Norm des Fehlers:   {:.6e}", results.stat_precision);
 }
+
 
 fn display_matrix(arguments: &mut CalculationArguments, results: &CalculationResults, options: &CalculationOptions)
 {
