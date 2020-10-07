@@ -4,6 +4,9 @@ use std::process;
 use std::env;
 use std::vec;
 
+// The supported calculation Algorithms
+// Gauss Seidel working on the same matrix
+// Jacobi using in and out matrices
 #[derive(Debug, PartialEq)]
 enum CalculationMethod
 {
@@ -11,6 +14,7 @@ enum CalculationMethod
     MethJacobi,
 }
 
+// For parsing command line arguments
 impl std::str::FromStr for CalculationMethod
 {
     type Err = String;
@@ -26,7 +30,9 @@ impl std::str::FromStr for CalculationMethod
     }
 }
 
-
+// The supported inference functions used during calculation
+// F0:     f(x,y) = 0
+// FPiSin: f(x,y) = 2pi^2*sin(pi*x)sin(pi*y)
 #[derive(Debug, PartialEq)]
 enum InferenceFunction
 {
@@ -34,6 +40,7 @@ enum InferenceFunction
     FuncFPiSin,
 }
 
+// For parsing command line arguments
 impl std::str::FromStr for InferenceFunction
 {
     type Err = String;
@@ -50,6 +57,9 @@ impl std::str::FromStr for InferenceFunction
 }
 
 
+// The supported termination conditions
+// TermPrec: terminate after set precision is reached
+// TermIter: terminate after set amount of iterations
 #[derive(Debug, PartialEq)]
 enum TerminationCondition
 {
@@ -57,6 +67,7 @@ enum TerminationCondition
     TermIter,
 }
 
+// For parsing command line arguments
 impl std::str::FromStr for TerminationCondition
 {
     type Err = String;
@@ -73,11 +84,12 @@ impl std::str::FromStr for TerminationCondition
 }
 
 
+// Data structure for storing the given parameters for the calculation
 #[derive(Debug)]
 struct CalculationOptions
 {
     number: u64,                        // number of threads
-    method: CalculationMethod,                 // Gauss Seidel or Jacobi method of iteration
+    method: CalculationMethod,          // Gauss Seidel or Jacobi method of iteration
     interlines: usize,                  // matrix size = interline*8+9
     inf_func: InferenceFunction,        // inference function
     termination: TerminationCondition,  // termination condition
@@ -96,11 +108,12 @@ impl CalculationOptions
 }
 
 
+// Data structure for storing the the data needed during calculation
 #[derive(Debug)]
 struct CalculationArguments
 {
     n: usize,                       // Number of spaces between lines (lines=n+1)
-    num_matrices: usize,              // number of matrices
+    num_matrices: usize,            // number of matrices
     h: f64,                         // length of a space between two lines
     matrices: Vec<PartdiffMatrix>,  // The matrices for calculation
 }
@@ -122,10 +135,11 @@ impl CalculationArguments
 }
 
 
+// Data structure for storing result data of the calculation
 #[derive(Debug)]
 struct CalculationResults
 {
-    m: usize,
+    m: usize,             // Index of matrix that holds the final state
     stat_iteration: u64,  // number of current iteration
     stat_precision: f64,  // actual precision of all slaces in iteration
 }
@@ -139,6 +153,8 @@ impl CalculationResults
 }
 
 
+// Simple data structure for a 2D matrix
+// Has an efficient continuous 1D memory layout
 #[derive(Debug)]
 struct PartdiffMatrix
 {
@@ -155,6 +171,14 @@ impl PartdiffMatrix
     }
 }
 
+// Implementation of Index and IndexMut traits for the matrix
+// 2d-array-indexing allows access to matrix elements with following syntax:
+//   matrix[[x,y]]
+//
+// This version is used if the crate is build with: --features "2d-array-indexing"
+// 
+// Also supports switching between indexing with or without bounds checking
+// This can be set by building the crate with or without: --features "unsafe-indexing"
 #[cfg(feature = "2d-array-indexing")]
 impl Index<[usize; 2]> for PartdiffMatrix
 {
@@ -191,6 +215,14 @@ impl IndexMut<[usize; 2]> for PartdiffMatrix
     }
 }
 
+// Implementation of Index and IndexMut traits for the matrix
+// C-style-indexing allows access to matrix elements with following syntax:
+//   matrix[x][y]
+//
+// This version is used if the crate is build with: --features "C-style-indexing"
+// 
+// Also supports switching between indexing with or without bounds checking
+// This can be set by building the crate with or without: --features "unsafe-indexing"
 #[cfg(feature = "C-style-indexing")]
 impl Index<usize> for PartdiffMatrix
 {
@@ -228,9 +260,10 @@ impl IndexMut<usize> for PartdiffMatrix
 }
 
 
+// Display help message to show the required command line arguments to run the binary
 fn usage()
 {
-    println!("Usage: ./partdiff [number] [method] [interlines] [func] [termination] [prec/iter]\n");
+    println!("Usage: ./rust_partdiff [number] [method] [interlines] [func] [termination] [prec/iter]\n");
     println!("  -number:      number of threads (1 .. n)");
     println!("  -method:      calculation method (MethGaussSeidel/MethJacobi OR 1/2)");
     println!("  -interlines:  number of interlines (1 .. n)");
@@ -245,6 +278,7 @@ fn usage()
 }
 
 
+// Helper function to parse command line arguments
 fn parse_arg<U>(arg: Option<String>) -> U
 where U: std::str::FromStr,
       <U as std::str::FromStr>::Err: std::fmt::Display
@@ -270,6 +304,7 @@ where U: std::str::FromStr,
     ret
 }
 
+// Parsing of command line arguments
 fn ask_params(mut args: std::env::Args) -> CalculationOptions
 {
     // TODO keep authors of original c version?
@@ -301,6 +336,7 @@ fn ask_params(mut args: std::env::Args) -> CalculationOptions
 
     let termination: TerminationCondition = parse_arg(args.next());
 
+    // Check for the meaning of the last argument
     match termination
     {
         TerminationCondition::TermPrec =>
@@ -319,7 +355,7 @@ fn ask_params(mut args: std::env::Args) -> CalculationOptions
             let iterations = parse_arg(args.next());
             if iterations < 1
             {
-                eprintln!("Error: termination iterations must be > 1");
+                eprintln!("Error: termination iterations must be > 0");
                 usage();
                 process::exit(1);
             }
@@ -329,6 +365,7 @@ fn ask_params(mut args: std::env::Args) -> CalculationOptions
 }
 
 
+// Determine calculation arguments and initialize calculation results
 fn init_variables(options: &CalculationOptions) -> (CalculationArguments, CalculationResults)
 {
     let n: usize = (options.interlines * 8) + 9 - 1;
@@ -345,6 +382,7 @@ fn init_variables(options: &CalculationOptions) -> (CalculationArguments, Calcul
 }
 
 
+// Initialize the matrix borders according to the used inference function
 fn init_matrices(arguments: &mut CalculationArguments, options: &CalculationOptions)
 {
     if options.inf_func == InferenceFunction::FuncF0
@@ -377,6 +415,7 @@ fn init_matrices(arguments: &mut CalculationArguments, options: &CalculationOpti
 }
 
 
+// Main calculation
 fn calculate(arguments: &mut CalculationArguments, results: &mut CalculationResults, options: &CalculationOptions)
 {
     const PI: f64 = 3.141592653589793;
@@ -394,6 +433,7 @@ fn calculate(arguments: &mut CalculationArguments, results: &mut CalculationResu
 
     let mut term_iteration = options.term_iteration;
 
+    // for distinguishing between old and new state of the matrix if two matrices are used
     let mut m1: usize = 0;
     let mut m2: usize = 0;
 
@@ -411,9 +451,6 @@ fn calculate(arguments: &mut CalculationArguments, results: &mut CalculationResu
 
     while term_iteration > 0
     {
-        // let matrix_in = &arguments.matrices[m1];
-        // let matrix_out = &mut arguments.matrices[m2];
-        
         let matrix = &mut arguments.matrices;
 
         maxresiduum = 0.0;
@@ -498,6 +535,7 @@ fn calculate(arguments: &mut CalculationArguments, results: &mut CalculationResu
 }
 
 
+// Display important information about the calculation
 fn display_statistics(arguments: &CalculationArguments, results: &CalculationResults, options: &CalculationOptions, duration: Duration)
 {
     let n = arguments.n;
@@ -523,6 +561,14 @@ fn display_statistics(arguments: &CalculationArguments, results: &CalculationRes
 }
 
 
+// Beschreibung der Funktion displayMatrix:                              
+//                                                                       
+// Die Funktion displayMatrix gibt eine Matrix                           
+// in einer "ubersichtlichen Art und Weise auf die Standardausgabe aus.  
+//                                                                       
+// Die "Ubersichtlichkeit wird erreicht, indem nur ein Teil der Matrix   
+// ausgegeben wird. Aus der Matrix werden die Randzeilen/-spalten sowie  
+// sieben Zwischenzeilen ausgegeben.                                     
 fn display_matrix(arguments: &mut CalculationArguments, results: &CalculationResults, options: &CalculationOptions)
 {
     let matrix = &mut arguments.matrices[results.m as usize];
